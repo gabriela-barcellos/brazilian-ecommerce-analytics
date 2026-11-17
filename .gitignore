@@ -1,0 +1,17 @@
+
+# Ambiente virtual
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Credenciais
+.env
+
+# Dados do projeto - não publicar CSVs
+data/
+
+# Arquivos temporários
+.DS_Store
+Thumbs.db
