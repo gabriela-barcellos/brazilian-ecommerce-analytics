@@ -46,6 +46,7 @@ verificação).
 | API | FastAPI + Uvicorn |
 | Visualização | HTML, CSS, JavaScript, Plotly.js 2.35.2 (CDN) |
 | Análise exploratória (1ª versão) | Pandas |
+| Containers | Docker, Docker Compose |
 | Versionamento | Git e GitHub |
 
 **Por que psycopg e não SQLAlchemy:** a ingestão usa `COPY` (a forma
@@ -81,7 +82,10 @@ benefício aqui.
 ├── reports/                    inventário, inspeção de schema e relatório de qualidade
 ├── dashboard.html              dashboard original (dados embutidos, ~44 MB)
 ├── dashboard_integrated.html   mesma dashboard consumindo a API (~29 KB)
-├── requirements.txt
+├── Dockerfile                  imagem do pipeline e da API
+├── docker-compose.yml          db + pipeline + api
+├── requirements.txt            ambiente local completo
+├── requirements-docker.txt     dependências mínimas da imagem
 └── .env.example                modelo da variável DATABASE_URL
 ```
 
@@ -215,9 +219,51 @@ Detalhes da avaliação inicial em
 
 Documentação interativa em `http://127.0.0.1:8000/docs`.
 
-## Como reproduzir (Windows / PowerShell)
+## Como reproduzir com Docker (recomendado)
 
-Pré-requisitos: Python 3.11+ e PostgreSQL instalados.
+Pré-requisito: [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+1. Baixe o dataset na [página da Olist no
+   Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) e
+   coloque os 9 CSVs, com os nomes originais, em `data/raw/`.
+2. Na raiz do projeto:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   O Compose sobe três serviços, nesta ordem:
+
+   | Serviço | O que faz |
+   |---|---|
+   | `db` | PostgreSQL 18; cria o banco e as tabelas na primeira subida |
+   | `pipeline` | roda Bronze → Silver → Gold → Qualidade e termina (≈ 3 a 4 min) |
+   | `api` | sobe a FastAPI em `http://127.0.0.1:8000`, só se o pipeline passar |
+
+3. Com a API no ar, abra `dashboard_integrated.html` no navegador.
+
+Comandos úteis:
+
+```bash
+docker compose logs -f pipeline       # acompanhar o pipeline
+docker compose run --rm pipeline      # rodar o pipeline de novo
+docker compose down                   # parar (mantém o banco)
+docker compose down -v                # parar e apagar o banco
+```
+
+O PostgreSQL do container fica em `127.0.0.1:5433` (para não conflitar
+com uma instalação local na 5432). A senha padrão do container é
+`postgres`; para usar outra, defina `POSTGRES_PASSWORD` no `.env`. As
+portas ficam presas a `127.0.0.1`, sem exposição na rede. A imagem usa
+`requirements-docker.txt`, só com o necessário para o pipeline e a API.
+
+As tabelas são criadas pelos scripts de `sql/` apenas quando o volume do
+banco está vazio. Se o schema mudar, recrie com `docker compose down -v`.
+
+## Como reproduzir sem Docker (Windows / PowerShell)
+
+Pré-requisitos: Python 3.10 ou superior e PostgreSQL instalados (com a
+pasta `bin` do PostgreSQL no PATH, para o comando `psql`).
 
 1. Baixe o dataset na [página da Olist no
    Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) e
@@ -291,7 +337,7 @@ Pré-requisitos: Python 3.11+ e PostgreSQL instalados.
   mantida e a falha fica registrada em `control.pipeline_runs`.
 - **Coordenada por CEP e distância por pedido:** a análise original não
   tinha o código do cálculo salvo. O critério (mediana por prefixo de CEP
-  + média das distâncias dos itens) foi identificado testando 64
+  + média das distâncias dos itens) foi identificado testando 128
   combinações contra os valores publicados na dashboard; é o único que
   reproduz todos eles.
 - **Calendário sem fuso horário:** `dim_date` é gerada com `DATE + inteiro`,
@@ -326,7 +372,6 @@ direto no banco.
 
 ## Próximos passos
 
-- Docker Compose para subir PostgreSQL, pipeline e API com um comando.
 - Capturas de tela da dashboard neste README.
 - Dicionário de dados das camadas Silver e Gold.
 

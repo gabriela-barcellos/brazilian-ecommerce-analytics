@@ -1,0 +1,65 @@
+# ============================================================
+# BRAZILIAN E-COMMERCE | DOCKER COMPOSE
+#
+#   docker compose up --build
+#
+# 1. db        PostgreSQL 18; cria o banco e as tabelas na 1ª subida
+# 2. pipeline  Bronze -> Silver -> Gold -> Qualidade (roda e termina)
+# 3. api       FastAPI em http://127.0.0.1:8000 (sobe só se o pipeline passar)
+#
+# Os CSVs da Olist são lidos de ./data/raw (não entram na imagem).
+# Portas presas a 127.0.0.1: nada fica exposto na rede.
+# Postgres do container na porta 5433 do host, para não conflitar com
+# um PostgreSQL local na 5432.
+# ============================================================
+
+name: brazilian-ecommerce
+
+x-database-url: &database-url
+  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/brazilian_ecommerce
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: brazilian_ecommerce
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      # Executados em ordem alfabética, só quando o volume está vazio
+      - ./sql/01_postgresql_foundation.sql:/docker-entrypoint-initdb.d/01_foundation.sql:ro
+      - ./sql/03_silver_tables.sql:/docker-entrypoint-initdb.d/02_silver.sql:ro
+      - ./sql/05_gold_tables.sql:/docker-entrypoint-initdb.d/03_gold.sql:ro
+      - ./sql/07_quality_tables.sql:/docker-entrypoint-initdb.d/04_quality.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d brazilian_ecommerce"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  pipeline:
+    build: .
+    command: ["python", "Scripts/run_pipeline.py"]
+    environment: *database-url
+    volumes:
+      - ./data/raw:/app/data/raw:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    environment: *database-url
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      pipeline:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,13 @@
+# Nada disso vai para a imagem
+.git/
+.venv/
+.vscode/
+.env
+data/
+image/
+video/
+reports/
+dashboard.html
+dashboard_integrated.html
+**/__pycache__/
+*.pyc

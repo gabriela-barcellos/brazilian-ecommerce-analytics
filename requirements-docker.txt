@@ -1,0 +1,8 @@
+# Dependências mínimas do pipeline e da API dentro do container.
+# (requirements.txt inclui também Pandas/Matplotlib, usados só nos
+# scripts da 1ª versão; ficam fora da imagem para deixá-la menor.)
+# Mesmas versões do requirements.txt.
+psycopg[binary]==3.3.9
+python-dotenv==1.2.4
+fastapi==0.165.0
+uvicorn==0.54.0
